@@ -1,3 +1,5 @@
+import type { Language } from './i18n';
+
 export type ProjectFileOutput = {
   rootName: string;
   files: Record<string, string>;
@@ -47,10 +49,14 @@ async function ensureDirectory(root: LocalDirectoryHandle, segments: string[]) {
   return current;
 }
 
-export async function selectDirectoryAndWriteProject(output: ProjectFileOutput) {
+export async function selectDirectoryAndWriteProject(output: ProjectFileOutput, language: Language = 'en') {
+  const l = (english: string, chinese: string) => language === 'en' ? english : chinese;
   const picker = (window as DirectoryPickerWindow).showDirectoryPicker;
   if (!picker) {
-    throw new DirectoryOutputError('UNSUPPORTED', '当前浏览器不支持目录写入，请使用最新版 Chrome、Edge 或其他 Chromium 浏览器。');
+    throw new DirectoryOutputError('UNSUPPORTED', l(
+      'This browser cannot write to a selected directory. Use the latest Chrome, Edge, or another Chromium browser.',
+      '当前浏览器不支持目录写入，请使用最新版 Chrome、Edge 或其他 Chromium 浏览器。',
+    ));
   }
 
   let selectedDirectory: LocalDirectoryHandle;
@@ -58,15 +64,18 @@ export async function selectDirectoryAndWriteProject(output: ProjectFileOutput) 
     selectedDirectory = await picker.call(window, { mode: 'readwrite' });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new DirectoryOutputError('CANCELLED', '已取消目录选择。');
+      throw new DirectoryOutputError('CANCELLED', l('Directory selection was cancelled.', '已取消目录选择。'));
     }
-    throw new DirectoryOutputError('WRITE_FAILED', error instanceof Error ? error.message : '无法访问所选目录。');
+    throw new DirectoryOutputError('WRITE_FAILED', error instanceof Error ? error.message : l('Could not access the selected directory.', '无法访问所选目录。'));
   }
 
   if (await directoryExists(selectedDirectory, output.rootName)) {
     throw new DirectoryOutputError(
       'DIRECTORY_EXISTS',
-      `所选位置已存在“${output.rootName}”目录。为保护已有源码，本次没有写入任何文件。`,
+      l(
+        `A folder named “${output.rootName}” already exists in the selected location. No files were written, protecting the existing source.`,
+        `所选位置已存在“${output.rootName}”目录。为保护已有源码，本次没有写入任何文件。`,
+      ),
     );
   }
 
@@ -93,7 +102,10 @@ export async function selectDirectoryAndWriteProject(output: ProjectFileOutput) 
   } catch (error) {
     throw new DirectoryOutputError(
       'WRITE_FAILED',
-      `源码写入失败：${error instanceof Error ? error.message : '未知错误'}。`,
+      l(
+        `Failed to write source files: ${error instanceof Error ? error.message : 'unknown error'}.`,
+        `源码写入失败：${error instanceof Error ? error.message : '未知错误'}。`,
+      ),
     );
   }
 }

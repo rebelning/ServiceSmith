@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 160" role="img" aria-labelledby="title desc">
+  <title id="title">ServiceSmith</title>
+  <desc id="desc">ServiceSmith, forge backend architecture you can see and run.</desc>
+  <defs>
+    <linearGradient id="surface" x1="15" y1="12" x2="145" y2="148" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#19232F"/>
+      <stop offset="1" stop-color="#090D12"/>
+    </linearGradient>
+    <linearGradient id="forge" x1="42" y1="30" x2="118" y2="126" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFB15F"/>
+      <stop offset=".48" stop-color="#FF7A45"/>
+      <stop offset="1" stop-color="#E84F2D"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="720" height="160" rx="22" fill="#080B0F"/>
+  <g transform="translate(12 8) scale(1.5)">
+    <rect x="3" y="3" width="90" height="90" rx="23" fill="url(#surface)" stroke="#2C3948" stroke-width="2"/>
+    <path d="M26 27H39M57 27H70M26 69H39M57 69H70M28 29L39 40M68 29L57 40M28 67L39 56M68 67L57 56" fill="none" stroke="#526171" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="23" cy="27" r="6" fill="#101820" stroke="#FF9A52" stroke-width="3"/><circle cx="73" cy="27" r="6" fill="#101820" stroke="#FF9A52" stroke-width="3"/>
+    <circle cx="23" cy="69" r="6" fill="#101820" stroke="#FF9A52" stroke-width="3"/><circle cx="73" cy="69" r="6" fill="#101820" stroke="#FF9A52" stroke-width="3"/>
+    <rect x="34" y="33" width="28" height="30" rx="8" fill="#0C1117" stroke="#3A4654" stroke-width="2"/>
+    <path d="M57.5 40.5H45.7c-3.7 0-6.2 2-6.2 5 0 3.2 2.5 4.6 6.5 5.1l4.2.5c1.7.2 2.5.8 2.5 1.8 0 1.3-1.1 2.1-3 2.1H38.5" fill="none" stroke="url(#forge)" stroke-width="5" stroke-linecap="round" filter="url(#glow)"/>
+  </g>
+  <text x="178" y="79" fill="#E7EDF5" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="53" font-weight="700" letter-spacing="-2">Service<tspan fill="#FF8A4C">Smith</tspan></text>
+  <text x="181" y="114" fill="#8190A3" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="16" font-weight="500" letter-spacing="1.1">FORGE BACKEND ARCHITECTURE YOU CAN SEE AND RUN</text>
+</svg>

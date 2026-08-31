@@ -28,6 +28,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { categories, getDefinition, nodeCatalog } from './catalog';
+import { categoryCopy, localizeDefinition } from './catalogLocale';
+import { useLanguage } from './i18n';
 import ProjectWizard from './ProjectWizard';
 import type { CanvasNode, Edge, NodeDefinition } from './types';
 import { validateNodeAddition } from './validation';
@@ -38,16 +40,16 @@ type Toast = { kind: 'success' | 'error' | 'info'; title: string; detail?: strin
 const starterNodes: CanvasNode[] = [
   { id: 'client-1', type: 'client', x: 54, y: 210, config: { ...getDefinition('client').defaults } },
   { id: 'gateway-1', type: 'api-gateway', x: 286, y: 210, config: { ...getDefinition('api-gateway').defaults } },
-  { id: 'service-1', type: 'backend-service', x: 518, y: 122, config: { ...getDefinition('backend-service').defaults, serviceName: '订单服务' } },
+  { id: 'service-1', type: 'backend-service', x: 518, y: 122, config: { ...getDefinition('backend-service').defaults, serviceName: 'Order Service' } },
   { id: 'redis-1', type: 'redis', x: 756, y: 76, config: { ...getDefinition('redis').defaults } },
   { id: 'mysql-1', type: 'mysql', x: 756, y: 252, config: { ...getDefinition('mysql').defaults } },
 ];
 
 const starterEdges: Edge[] = [
-  { id: 'e1', source: 'client-1', target: 'gateway-1', protocol: 'HTTP', mode: 'SYNC', timeout: 3000, retries: 0, description: '客户端请求进入网关' },
-  { id: 'e2', source: 'gateway-1', target: 'service-1', protocol: 'HTTP', mode: 'SYNC', timeout: 1500, retries: 1, description: '网关路由到订单服务' },
-  { id: 'e3', source: 'service-1', target: 'redis-1', protocol: 'CACHE', mode: 'SYNC', timeout: 100, retries: 0, description: '查询订单缓存' },
-  { id: 'e4', source: 'service-1', target: 'mysql-1', protocol: 'SQL', mode: 'SYNC', timeout: 1000, retries: 0, description: '读取订单数据' },
+  { id: 'e1', source: 'client-1', target: 'gateway-1', protocol: 'HTTP', mode: 'SYNC', timeout: 3000, retries: 0, description: 'Client request enters the gateway' },
+  { id: 'e2', source: 'gateway-1', target: 'service-1', protocol: 'HTTP', mode: 'SYNC', timeout: 1500, retries: 1, description: 'Gateway routes to the order service' },
+  { id: 'e3', source: 'service-1', target: 'redis-1', protocol: 'CACHE', mode: 'SYNC', timeout: 100, retries: 0, description: 'Read the order cache' },
+  { id: 'e4', source: 'service-1', target: 'mysql-1', protocol: 'SQL', mode: 'SYNC', timeout: 1000, retries: 0, description: 'Read order data' },
 ];
 
 const loadStored = <T,>(key: string, fallback: T): T => {
@@ -74,6 +76,7 @@ function inferProtocol(sourceType: string, targetType: string) {
 }
 
 export default function App() {
+  const { language, setLanguage, l } = useLanguage();
   const [nodes, setNodes] = useState<CanvasNode[]>(() => loadStored('servicesmith:nodes', loadStored('flowlab:nodes', starterNodes)));
   const [edges, setEdges] = useState<Edge[]>(() => loadStored('servicesmith:edges', loadStored('flowlab:edges', starterEdges)));
   const [selectedId, setSelectedId] = useState<string | null>('service-1');
@@ -101,8 +104,9 @@ export default function App() {
   const selectedEdge = edges.find((edge) => edge.id === selectedEdgeId) ?? null;
   const selectedEdgeSource = selectedEdge ? nodes.find((node) => node.id === selectedEdge.source) ?? null : null;
   const selectedEdgeTarget = selectedEdge ? nodes.find((node) => node.id === selectedEdge.target) ?? null : null;
-  const inspectedDefinition = getDefinition(selectedNode?.type ?? previewType);
-  const inspectedValidation = validateNodeAddition(inspectedDefinition, nodes);
+  const definitionFor = (type: string) => localizeDefinition(getDefinition(type), language);
+  const inspectedDefinition = definitionFor(selectedNode?.type ?? previewType);
+  const inspectedValidation = validateNodeAddition(getDefinition(selectedNode?.type ?? previewType), nodes, language);
 
   useEffect(() => {
     localStorage.setItem('servicesmith:nodes', JSON.stringify(nodes));
@@ -123,23 +127,25 @@ export default function App() {
     const query = search.trim().toLowerCase();
     return nodeCatalog.filter((definition) => {
       const categoryMatches = activeCategory === 'all' || definition.category === activeCategory;
-      const textMatches = !query || [definition.name, definition.subtitle, ...definition.tags]
+      const localized = localizeDefinition(definition, language);
+      const textMatches = !query || [localized.name, localized.subtitle, ...localized.tags, definition.name, ...definition.tags]
         .join(' ')
         .toLowerCase()
         .includes(query);
       return categoryMatches && textMatches;
     });
-  }, [search, activeCategory]);
+  }, [search, activeCategory, language]);
 
   const showToast = (next: Toast) => setToast(next);
 
   const addNode = (definition: NodeDefinition, point?: { x: number; y: number }) => {
-    const result = validateNodeAddition(definition, nodes);
+    const result = validateNodeAddition(definition, nodes, language);
+    const displayDefinition = localizeDefinition(definition, language);
     setPreviewType(definition.type);
     setSelectedId(null);
     setSelectedEdgeId(null);
     if (!result.allowed) {
-      showToast({ kind: 'error', title: `暂时不能添加 ${definition.name}`, detail: result.reasons.join(' ') });
+      showToast({ kind: 'error', title: l(`Cannot add ${displayDefinition.name} yet`, `暂时不能添加 ${displayDefinition.name}`), detail: result.reasons.join(' ') });
       return false;
     }
 
@@ -149,13 +155,16 @@ export default function App() {
       type: definition.type,
       x: Math.max(16, Math.min(point?.x ?? 84 + cascade * 28, 900)),
       y: Math.max(16, Math.min(point?.y ?? 70 + cascade * 28, 470)),
-      config: { ...definition.defaults },
+      config: {
+        ...definition.defaults,
+        ...(definition.type === 'backend-service' && language === 'en' ? { serviceName: 'Backend Service' } : {}),
+      },
     };
     setNodes((current) => [...current, nextNode]);
     setSelectedId(nextNode.id);
     setSelectedEdgeId(null);
     setInspectorTab('config');
-    showToast({ kind: 'success', title: `${definition.name} 已添加`, detail: '已通过依赖与实例数量校验。' });
+    showToast({ kind: 'success', title: l(`${displayDefinition.name} added`, `${displayDefinition.name} 已添加`), detail: l('Dependency and instance-limit checks passed.', '已通过依赖与实例数量校验。') });
     return true;
   };
 
@@ -166,7 +175,7 @@ export default function App() {
     setSelectedId(null);
     setSelectedEdgeId(null);
     setConnectionSource((source) => source === id ? null : source);
-    if (node) showToast({ kind: 'info', title: `${getDefinition(node.type).name} 已移除`, detail: '相关连线已同步清理。' });
+    if (node) showToast({ kind: 'info', title: l(`${definitionFor(node.type).name} removed`, `${definitionFor(node.type).name} 已移除`), detail: l('Its connections were removed as well.', '相关连线已同步清理。') });
   };
 
   const updateConfig = (key: string, value: string | number | boolean) => {
@@ -190,22 +199,25 @@ export default function App() {
     setSelectedEdgeId(null);
     showToast({
       kind: 'info',
-      title: '连接已单独删除',
-      detail: `${source ? getDefinition(source.type).name : '源节点'} → ${target ? getDefinition(target.type).name : '目标节点'}，两端节点均已保留。`,
+      title: l('Connection removed', '连接已单独删除'),
+      detail: l(
+        `${source ? definitionFor(source.type).name : 'Source'} → ${target ? definitionFor(target.type).name : 'Target'}. Both nodes were preserved.`,
+        `${source ? definitionFor(source.type).name : '源节点'} → ${target ? definitionFor(target.type).name : '目标节点'}，两端节点均已保留。`,
+      ),
     });
   };
 
   const startConnection = (id: string) => {
     setConnectionSource(id);
     setSelectedEdgeId(null);
-    showToast({ kind: 'info', title: '请选择目标节点', detail: '点击另一个节点左侧的输入端口即可完成连线。' });
+    showToast({ kind: 'info', title: l('Select a target node', '请选择目标节点'), detail: l('Click the input port on another node to finish the connection.', '点击另一个节点左侧的输入端口即可完成连线。') });
   };
 
   const finishConnection = (target: string) => {
     if (!connectionSource || connectionSource === target) return;
     const exists = edges.some((edge) => edge.source === connectionSource && edge.target === target);
     if (exists) {
-      showToast({ kind: 'error', title: '连线已存在' });
+      showToast({ kind: 'error', title: l('Connection already exists', '连线已存在') });
       setConnectionSource(null);
       return;
     }
@@ -225,7 +237,7 @@ export default function App() {
     setSelectedEdgeId(nextEdge.id);
     setSelectedId(null);
     setConnectionSource(null);
-    showToast({ kind: 'success', title: '节点连接成功', detail: `${getDefinition(sourceNode.type).name} → ${getDefinition(targetNode.type).name}` });
+    showToast({ kind: 'success', title: l('Nodes connected', '节点连接成功'), detail: `${definitionFor(sourceNode.type).name} → ${definitionFor(targetNode.type).name}` });
   };
 
   const onCanvasDrop = (event: React.DragEvent) => {
@@ -265,18 +277,18 @@ export default function App() {
     if (runIndex.current >= runQueue.current.length) {
       setRunState('idle');
       setActiveRunNode(null);
-      showToast({ kind: 'success', title: '运行完成', detail: `共经过 ${runQueue.current.length} 个节点。` });
+      showToast({ kind: 'success', title: l('Run complete', '运行完成'), detail: l(`Visited ${runQueue.current.length} nodes.`, `共经过 ${runQueue.current.length} 个节点。`) });
       return;
     }
     const id = runQueue.current[runIndex.current++];
     const node = nodes.find((item) => item.id === id);
     if (!node) return;
-    const definition = getDefinition(node.type);
+    const definition = definitionFor(node.type);
     const elapsed = Date.now() - runStart.current;
     setActiveRunNode(id);
     setRunLogs((current) => [...current, {
       time: elapsed,
-      title: `${definition.name} 正在处理`,
+      title: l(`${definition.name} is processing`, `${definition.name} 正在处理`),
       detail: definition.principles[0],
     }]);
     runTimer.current = window.setTimeout(runNext, 780);
@@ -290,7 +302,7 @@ export default function App() {
     }
     const queue = buildRunQueue();
     if (!queue.length) {
-      showToast({ kind: 'error', title: '画布中还没有可运行节点' });
+      showToast({ kind: 'error', title: l('There are no runnable nodes on the canvas.', '画布中还没有可运行节点') });
       return;
     }
     runQueue.current = queue;
@@ -315,32 +327,36 @@ export default function App() {
     setConnectionSource(null);
     setRunLogs([]);
     setActiveRunNode(null);
-    showToast({ kind: 'info', title: '已恢复订单查询示例' });
+    showToast({ kind: 'info', title: l('Order query example restored', '已恢复订单查询示例') });
   };
 
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark"><GitBranch size={20} /></div>
+          <div className="brand-mark"><img src="/servicesmith-mark.svg" alt="" /></div>
           <div>
             <div className="brand-name">ServiceSmith</div>
-            <div className="brand-sub">Visual Backend Architecture Lab</div>
+            <div className="brand-sub">{l('Visual Backend Architecture Lab', '可视化后端架构实验室')}</div>
           </div>
           <span className="version-pill">MVP · 01</span>
         </div>
         <div className="project-title">
           <span className="live-dot" />
-          订单查询架构实验
-          <span className="saved-label"><Check size={12} /> 已自动保存</span>
+          {l('Order Query Architecture Lab', '订单查询架构实验')}
+          <span className="saved-label"><Check size={12} /> {l('Autosaved', '已自动保存')}</span>
         </div>
         <div className="top-actions">
-          <button className="button ghost" onClick={resetProject}><RotateCcw size={15} /> 恢复示例</button>
-          <button className="button project-create" onClick={() => setShowProjectWizard(true)}><FolderPlus size={15} /> 创建项目</button>
+          <div className="language-switch" aria-label={l('Language', '语言')}>
+            <button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>EN</button>
+            <button className={language === 'zh' ? 'active' : ''} onClick={() => setLanguage('zh')}>中文</button>
+          </div>
+          <button className="button ghost" onClick={resetProject}><RotateCcw size={15} /> {l('Reset', '恢复示例')}</button>
+          <button className="button project-create" onClick={() => setShowProjectWizard(true)}><FolderPlus size={15} /> {l('Create Project', '创建项目')}</button>
           {runState === 'running' ? (
-            <button className="button primary" onClick={pauseRun}><Pause size={15} /> 暂停</button>
+            <button className="button primary" onClick={pauseRun}><Pause size={15} /> {l('Pause', '暂停')}</button>
           ) : (
-            <button className="button primary" onClick={startRun}><Play size={15} fill="currentColor" /> {runState === 'paused' ? '继续' : '运行工作流'}</button>
+            <button className="button primary" onClick={startRun}><Play size={15} fill="currentColor" /> {runState === 'paused' ? l('Resume', '继续') : l('Run Workflow', '运行工作流')}</button>
           )}
         </div>
       </header>
@@ -350,19 +366,19 @@ export default function App() {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">NODE LIBRARY</span>
-              <h2>节点库</h2>
+              <h2>{l('Node Library', '节点库')}</h2>
             </div>
             <span className="node-count">{nodeCatalog.length}</span>
           </div>
           <label className="search-box">
             <Search size={15} />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索节点或技术…" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={l('Search nodes or technologies…', '搜索节点或技术…')} />
             {search && <button onClick={() => setSearch('')}><X size={13} /></button>}
           </label>
           <div className="category-chips">
-            <button className={activeCategory === 'all' ? 'active' : ''} onClick={() => setActiveCategory('all')}>全部</button>
+            <button className={activeCategory === 'all' ? 'active' : ''} onClick={() => setActiveCategory('all')}>{l('All', '全部')}</button>
             {categories.map((category) => (
-              <button key={category.id} className={activeCategory === category.id ? 'active' : ''} onClick={() => setActiveCategory(category.id)}>{category.short}</button>
+              <button key={category.id} className={activeCategory === category.id ? 'active' : ''} onClick={() => setActiveCategory(category.id)}>{language === 'en' ? categoryCopy[category.id].shortEn : categoryCopy[category.id].shortZh}</button>
             ))}
           </div>
           <div className="catalog-scroll">
@@ -373,12 +389,13 @@ export default function App() {
               return (
                 <section className="catalog-group" key={category.id}>
                   <button className="group-title" onClick={() => setCollapsed((current) => ({ ...current, [category.id]: !current[category.id] }))}>
-                    <span>{isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}{category.name}</span>
+                    <span>{isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}{language === 'en' ? categoryCopy[category.id].en : categoryCopy[category.id].zh}</span>
                     <em>{items.length}</em>
                   </button>
                   {!isCollapsed && <div className="catalog-items">
                     {items.map((definition) => {
-                      const validation = validateNodeAddition(definition, nodes);
+                      const displayDefinition = localizeDefinition(definition, language);
+                      const validation = validateNodeAddition(definition, nodes, language);
                       return (
                         <article
                           key={definition.type}
@@ -390,15 +407,15 @@ export default function App() {
                           className={`catalog-card ${previewType === definition.type && !selectedNode ? 'selected' : ''} ${validation.allowed ? '' : 'locked'}`}
                           onClick={() => { setSelectedId(null); setSelectedEdgeId(null); setPreviewType(definition.type); setInspectorTab('config'); }}
                         >
-                          <div className="catalog-icon" style={{ '--node-color': definition.color } as React.CSSProperties}>{definition.icon}</div>
+                          <div className="catalog-icon" style={{ '--node-color': displayDefinition.color } as React.CSSProperties}>{displayDefinition.icon}</div>
                           <div className="catalog-copy">
-                            <strong>{definition.name}</strong>
-                            <span>{definition.subtitle}</span>
+                            <strong>{displayDefinition.name}</strong>
+                            <span>{displayDefinition.subtitle}</span>
                             {!validation.allowed && <small><LockKeyhole size={10} /> {validation.reasons[0]}</small>}
                           </div>
                           <button
                             className="quick-add"
-                            title={validation.allowed ? `添加 ${definition.name}` : validation.reasons[0]}
+                            title={validation.allowed ? l(`Add ${displayDefinition.name}`, `添加 ${displayDefinition.name}`) : validation.reasons[0]}
                             onClick={(event) => { event.stopPropagation(); addNode(definition); }}
                           >
                             {validation.allowed ? <CirclePlus size={17} /> : <LockKeyhole size={15} />}
@@ -410,18 +427,18 @@ export default function App() {
                 </section>
               );
             })}
-            {!filteredCatalog.length && <div className="empty-search"><Search size={22} /><p>没有找到匹配节点</p></div>}
+            {!filteredCatalog.length && <div className="empty-search"><Search size={22} /><p>{l('No matching nodes found', '没有找到匹配节点')}</p></div>}
           </div>
-          <div className="library-tip"><CircleHelp size={15} /><span>点击查看详情，或拖到画布添加。锁定节点会显示所缺依赖。</span></div>
+          <div className="library-tip"><CircleHelp size={15} /><span>{l('Click for details or drag onto the canvas. Locked nodes show missing dependencies.', '点击查看详情，或拖到画布添加。锁定节点会显示所缺依赖。')}</span></div>
         </aside>
 
         <section className="center-stage">
           <div className="canvas-toolbar">
-            <div className="canvas-title"><Box size={15} /> 架构画布 <span>{nodes.length} 节点 · {edges.length} 连线</span></div>
+            <div className="canvas-title"><Box size={15} /> {l('Architecture Canvas', '架构画布')} <span>{l(`${nodes.length} nodes · ${edges.length} connections`, `${nodes.length} 节点 · ${edges.length} 连线`)}</span></div>
             <div className="legend">
-              <span><i className="legend-dot healthy" />可运行</span>
-              <span><i className="legend-dot active" />执行中</span>
-              {connectionSource && <button className="cancel-connect" onClick={() => setConnectionSource(null)}><Unplug size={13} /> 取消连线</button>}
+              <span><i className="legend-dot healthy" />{l('Ready', '可运行')}</span>
+              <span><i className="legend-dot active" />{l('Running', '执行中')}</span>
+              {connectionSource && <button className="cancel-connect" onClick={() => setConnectionSource(null)}><Unplug size={13} /> {l('Cancel connection', '取消连线')}</button>}
             </div>
           </div>
           <div
@@ -470,7 +487,7 @@ export default function App() {
             </svg>
 
             {nodes.map((node) => {
-              const definition = getDefinition(node.type);
+              const definition = definitionFor(node.type);
               const selected = selectedId === node.id;
               const active = activeRunNode === node.id;
               const displayName = String(node.config.serviceName || definition.name);
@@ -489,8 +506,8 @@ export default function App() {
                   onPointerMove={(event) => moveNode(event, node.id)}
                   onPointerUp={(event) => { event.currentTarget.releasePointerCapture(event.pointerId); dragState.current = null; }}
                 >
-                  <button className="port input" title="连接到此节点" onClick={(event) => { event.stopPropagation(); finishConnection(node.id); }} />
-                  <button className="port output" title="从此节点创建连线" onClick={(event) => { event.stopPropagation(); startConnection(node.id); }} />
+                  <button className="port input" title={l('Connect to this node', '连接到此节点')} onClick={(event) => { event.stopPropagation(); finishConnection(node.id); }} />
+                  <button className="port output" title={l('Start a connection from this node', '从此节点创建连线')} onClick={(event) => { event.stopPropagation(); startConnection(node.id); }} />
                   <div className="node-topline" />
                   <div className="node-icon">{definition.icon}</div>
                   <div className="node-copy"><strong>{displayName}</strong><span>{definition.subtitle}</span></div>
@@ -501,20 +518,20 @@ export default function App() {
             })}
 
             {!nodes.length && (
-              <div className="empty-canvas"><CirclePlus size={32} /><h3>从左侧添加第一个节点</h3><p>你可以点击“＋”，也可以直接拖入画布。</p></div>
+              <div className="empty-canvas"><CirclePlus size={32} /><h3>{l('Add your first node from the library', '从左侧添加第一个节点')}</h3><p>{l('Click the plus button or drag a node onto the canvas.', '你可以点击“＋”，也可以直接拖入画布。')}</p></div>
             )}
-            <div className="canvas-help"><Link2 size={13} /> 点击连线可在右侧单独配置或删除 · 使用节点两侧端口创建连接</div>
+            <div className="canvas-help"><Link2 size={13} /> {l('Click a connection to configure or remove it · Use node ports to create connections', '点击连线可在右侧单独配置或删除 · 使用节点两侧端口创建连接')}</div>
           </div>
 
           {showTimeline && (
             <div className="timeline-panel">
               <div className="timeline-head">
-                <span><Activity size={15} /> 运行时间线</span>
+                <span><Activity size={15} /> {l('Runtime Timeline', '运行时间线')}</span>
                 <div><em>{runState === 'running' ? 'LIVE' : runLogs.length ? 'COMPLETE' : 'WAITING'}</em><button onClick={() => setShowTimeline(false)}><X size={14} /></button></div>
               </div>
               <div className="timeline-body">
                 {!runLogs.length ? (
-                  <div className="timeline-empty"><Play size={15} /> 点击“运行工作流”，查看请求经过各节点时的技术过程。</div>
+                  <div className="timeline-empty"><Play size={15} /> {l('Run the workflow to watch the request move through the topology.', '点击“运行工作流”，查看请求经过各节点时的技术过程。')}</div>
                 ) : runLogs.map((log, index) => (
                   <div className="timeline-event" key={`${log.time}-${index}`}>
                     <span className="event-time">+{log.time}ms</span>
@@ -526,7 +543,7 @@ export default function App() {
               </div>
             </div>
           )}
-          {!showTimeline && <button className="open-timeline" onClick={() => setShowTimeline(true)}><Activity size={14} /> 展开运行时间线</button>}
+          {!showTimeline && <button className="open-timeline" onClick={() => setShowTimeline(true)}><Activity size={14} /> {l('Open runtime timeline', '展开运行时间线')}</button>}
         </section>
 
         <aside className="inspector-panel">
@@ -534,38 +551,38 @@ export default function App() {
             <>
               <div className="inspector-head edge-inspector-head">
                 <div className="inspector-icon edge-inspector-icon"><Link2 size={21} /></div>
-                <div><span>SELECTED CONNECTION</span><h2>{selectedEdge.protocol} 连接</h2><p>{selectedEdge.mode ?? 'SYNC'} · 独立连接配置</p></div>
-                <button className="delete-node" title="仅删除这条连接" onClick={() => removeEdge(selectedEdge.id)}><Trash2 size={16} /></button>
+                <div><span>{l('SELECTED CONNECTION', '已选连接')}</span><h2>{l(`${selectedEdge.protocol} Connection`, `${selectedEdge.protocol} 连接`)}</h2><p>{selectedEdge.mode ?? 'SYNC'} · {l('Independent connection settings', '独立连接配置')}</p></div>
+                <button className="delete-node" title={l('Remove only this connection', '仅删除这条连接')} onClick={() => removeEdge(selectedEdge.id)}><Trash2 size={16} /></button>
               </div>
 
               <div className="edge-summary">
                 <div className="endpoint-card">
-                  <small>SOURCE · 源节点</small>
+                  <small>SOURCE · {l('FROM', '源节点')}</small>
                   <div>
                     <i style={{ '--endpoint-color': selectedEdgeSource ? getDefinition(selectedEdgeSource.type).color : '#68788a' } as React.CSSProperties} />
-                    <strong>{selectedEdgeSource ? String(selectedEdgeSource.config.serviceName || getDefinition(selectedEdgeSource.type).name) : '节点不存在'}</strong>
+                    <strong>{selectedEdgeSource ? String(selectedEdgeSource.config.serviceName || definitionFor(selectedEdgeSource.type).name) : l('Missing node', '节点不存在')}</strong>
                   </div>
                 </div>
                 <div className="edge-direction"><ChevronRight size={17} /></div>
                 <div className="endpoint-card target">
-                  <small>TARGET · 目标节点</small>
+                  <small>TARGET · {l('TO', '目标节点')}</small>
                   <div>
                     <i style={{ '--endpoint-color': selectedEdgeTarget ? getDefinition(selectedEdgeTarget.type).color : '#68788a' } as React.CSSProperties} />
-                    <strong>{selectedEdgeTarget ? String(selectedEdgeTarget.config.serviceName || getDefinition(selectedEdgeTarget.type).name) : '节点不存在'}</strong>
+                    <strong>{selectedEdgeTarget ? String(selectedEdgeTarget.config.serviceName || definitionFor(selectedEdgeTarget.type).name) : l('Missing node', '节点不存在')}</strong>
                   </div>
                 </div>
               </div>
 
               <div className="inspector-scroll edge-inspector-scroll">
                 <section className="info-block compact">
-                  <div className="section-label"><Info size={13} />连接说明</div>
-                  <p>这是一条独立连接。修改或删除它只会影响当前这条调用关系，不会删除两端节点及它们的其他连接。</p>
+                  <div className="section-label"><Info size={13} />{l('Connection overview', '连接说明')}</div>
+                  <p>{l('This is an independent connection. Editing or removing it affects only this call relationship and preserves both nodes and their other connections.', '这是一条独立连接。修改或删除它只会影响当前这条调用关系，不会删除两端节点及它们的其他连接。')}</p>
                 </section>
 
                 <section className="config-section edge-config-section">
-                  <div className="section-label"><Settings2 size={13} />连接配置</div>
+                  <div className="section-label"><Settings2 size={13} />{l('Connection settings', '连接配置')}</div>
                   <label className="config-field">
-                    <span>通信协议</span>
+                    <span>{l('Protocol', '通信协议')}</span>
                     <div className="field-control">
                       <select value={selectedEdge.protocol} onChange={(event) => updateEdge('protocol', event.target.value)}>
                         {['HTTP', 'HTTPS', 'gRPC', 'TCP', 'SQL', 'CACHE', 'EVENT', 'METRICS', 'TRACE', 'xDS / HTTP'].map((protocol) => <option key={protocol}>{protocol}</option>)}
@@ -573,43 +590,43 @@ export default function App() {
                     </div>
                   </label>
                   <label className="config-field">
-                    <span>调用模式</span>
+                    <span>{l('Call mode', '调用模式')}</span>
                     <div className="field-control">
                       <select value={selectedEdge.mode ?? 'SYNC'} onChange={(event) => updateEdge('mode', event.target.value)}>
-                        <option value="SYNC">同步调用</option>
-                        <option value="ASYNC">异步调用</option>
-                        <option value="STREAM">流式传输</option>
+                        <option value="SYNC">{l('Synchronous', '同步调用')}</option>
+                        <option value="ASYNC">{l('Asynchronous', '异步调用')}</option>
+                        <option value="STREAM">{l('Streaming', '流式传输')}</option>
                       </select>
                     </div>
                   </label>
                   <label className="config-field">
-                    <span>超时时间</span>
+                    <span>{l('Timeout', '超时时间')}</span>
                     <div className="field-control">
                       <input type="number" min={0} value={selectedEdge.timeout ?? 1000} onChange={(event) => updateEdge('timeout', Number(event.target.value))} />
                       <em>ms</em>
                     </div>
                   </label>
                   <label className="config-field">
-                    <span>失败重试</span>
+                    <span>{l('Retries', '失败重试')}</span>
                     <div className="field-control">
                       <input type="number" min={0} max={10} value={selectedEdge.retries ?? 0} onChange={(event) => updateEdge('retries', Number(event.target.value))} />
-                      <em>次</em>
+                      <em>{l('times', '次')}</em>
                     </div>
                   </label>
                   <label className="edge-description-field">
-                    <span>用途备注</span>
+                    <span>{l('Purpose', '用途备注')}</span>
                     <textarea
                       value={selectedEdge.description ?? ''}
-                      placeholder="例如：网关将订单请求转发到订单服务"
+                      placeholder={l('Example: Route order requests to the order service', '例如：网关将订单请求转发到订单服务')}
                       onChange={(event) => updateEdge('description', event.target.value)}
                     />
                   </label>
                 </section>
 
                 <section className="connection-safety">
-                  <div><CircleAlert size={15} /><strong>连接操作</strong></div>
-                  <p>删除后无法通过界面撤销，但不会删除源节点、目标节点或其他连接。</p>
-                  <button className="delete-edge-button" onClick={() => removeEdge(selectedEdge.id)}><Trash2 size={14} />仅删除当前连接</button>
+                  <div><CircleAlert size={15} /><strong>{l('Connection action', '连接操作')}</strong></div>
+                  <p>{l('This action cannot be undone in the current editor. It will not remove either node or any other connection.', '删除后无法通过界面撤销，但不会删除源节点、目标节点或其他连接。')}</p>
+                  <button className="delete-edge-button" onClick={() => removeEdge(selectedEdge.id)}><Trash2 size={14} />{l('Remove this connection only', '仅删除当前连接')}</button>
                 </section>
               </div>
             </>
@@ -617,14 +634,14 @@ export default function App() {
             <>
           <div className="inspector-head">
             <div className="inspector-icon" style={{ '--node-color': inspectedDefinition.color } as React.CSSProperties}>{inspectedDefinition.icon}</div>
-            <div><span>{selectedNode ? 'SELECTED NODE' : 'LIBRARY PREVIEW'}</span><h2>{selectedNode && selectedNode.config.serviceName ? String(selectedNode.config.serviceName) : inspectedDefinition.name}</h2><p>{inspectedDefinition.subtitle}</p></div>
-            {selectedNode && <button className="delete-node" title="删除节点" onClick={() => removeNode(selectedNode.id)}><Trash2 size={16} /></button>}
+            <div><span>{selectedNode ? l('SELECTED NODE', '已选节点') : l('LIBRARY PREVIEW', '节点库预览')}</span><h2>{selectedNode && selectedNode.config.serviceName ? String(selectedNode.config.serviceName) : inspectedDefinition.name}</h2><p>{inspectedDefinition.subtitle}</p></div>
+            {selectedNode && <button className="delete-node" title={l('Remove node', '删除节点')} onClick={() => removeNode(selectedNode.id)}><Trash2 size={16} /></button>}
           </div>
 
           <div className="inspector-tabs">
-            <button className={inspectorTab === 'config' ? 'active' : ''} onClick={() => setInspectorTab('config')}><Settings2 size={14} />配置</button>
-            <button className={inspectorTab === 'guide' ? 'active' : ''} onClick={() => setInspectorTab('guide')}><BookOpen size={14} />用法</button>
-            <button className={inspectorTab === 'principle' ? 'active' : ''} onClick={() => setInspectorTab('principle')}><Sparkles size={14} />原理</button>
+            <button className={inspectorTab === 'config' ? 'active' : ''} onClick={() => setInspectorTab('config')}><Settings2 size={14} />{l('Config', '配置')}</button>
+            <button className={inspectorTab === 'guide' ? 'active' : ''} onClick={() => setInspectorTab('guide')}><BookOpen size={14} />{l('Usage', '用法')}</button>
+            <button className={inspectorTab === 'principle' ? 'active' : ''} onClick={() => setInspectorTab('principle')}><Sparkles size={14} />{l('Concepts', '原理')}</button>
           </div>
 
           <div className="inspector-scroll">
@@ -632,14 +649,14 @@ export default function App() {
               <div className={`validation-card ${inspectedValidation.allowed ? 'allowed' : 'blocked'}`}>
                 <div className="validation-title">
                   {inspectedValidation.allowed ? <Check size={16} /> : <CircleAlert size={16} />}
-                  <strong>{inspectedValidation.allowed ? '可以添加此节点' : '当前不满足添加条件'}</strong>
+                  <strong>{inspectedValidation.allowed ? l('Ready to add', '可以添加此节点') : l('Requirements not met', '当前不满足添加条件')}</strong>
                 </div>
                 {inspectedValidation.allowed
-                  ? <p>依赖条件和实例数量校验均已通过。</p>
+                  ? <p>{l('Dependency and instance-limit checks passed.', '依赖条件和实例数量校验均已通过。')}</p>
                   : <>{inspectedValidation.reasons.map((reason) => <p key={reason}>{reason}</p>)}{inspectedValidation.suggestions.map((suggestion) => <small key={suggestion}>{suggestion}</small>)}</>}
                 <button className="button add-from-inspector" onClick={() => addNode(inspectedDefinition)}>
                   {inspectedValidation.allowed ? <CirclePlus size={15} /> : <LockKeyhole size={14} />}
-                  添加到画布
+                  {l('Add to canvas', '添加到画布')}
                 </button>
               </div>
             )}
@@ -647,13 +664,13 @@ export default function App() {
             {inspectorTab === 'config' && (
               <>
                 <section className="info-block compact">
-                  <div className="section-label"><Info size={13} />节点说明</div>
+                  <div className="section-label"><Info size={13} />{l('Node overview', '节点说明')}</div>
                   <p>{inspectedDefinition.description}</p>
                   <div className="tag-row">{inspectedDefinition.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
                 </section>
                 <section className="config-section">
-                  <div className="section-label"><Settings2 size={13} />运行配置</div>
-                  {!selectedNode && <div className="preview-note">添加节点后可以修改以下配置</div>}
+                  <div className="section-label"><Settings2 size={13} />{l('Runtime settings', '运行配置')}</div>
+                  {!selectedNode && <div className="preview-note">{l('Add the node to edit these settings.', '添加节点后可以修改以下配置')}</div>}
                   {inspectedDefinition.configFields.map((field) => {
                     const value = selectedNode?.config[field.key] ?? inspectedDefinition.defaults[field.key];
                     return (
@@ -692,22 +709,22 @@ export default function App() {
             {inspectorTab === 'guide' && (
               <>
                 <section className="info-block">
-                  <div className="section-label"><BookOpen size={13} />推荐用法</div>
+                  <div className="section-label"><BookOpen size={13} />{l('Recommended usage', '推荐用法')}</div>
                   <ol>{inspectedDefinition.usage.map((item) => <li key={item}>{item}</li>)}</ol>
                 </section>
                 {inspectedDefinition.requirements?.length ? (
                   <section className="dependency-block">
-                    <div className="section-label"><GitBranch size={13} />添加依赖</div>
+                    <div className="section-label"><GitBranch size={13} />{l('Dependencies', '添加依赖')}</div>
                     {inspectedDefinition.requirements.map((requirement) => (
                       <div className="dependency-item" key={requirement.description}>
                         <span>{requirement.description}</span>
-                        <div>{requirement.types.map((type) => <button key={type} onClick={() => { setSelectedId(null); setSelectedEdgeId(null); setPreviewType(type); }}>{getDefinition(type).name}</button>)}</div>
+                        <div>{requirement.types.map((type) => <button key={type} onClick={() => { setSelectedId(null); setSelectedEdgeId(null); setPreviewType(type); }}>{definitionFor(type).name}</button>)}</div>
                       </div>
                     ))}
                   </section>
-                ) : <div className="no-dependency"><Check size={15} />该节点没有前置依赖，可以直接添加。</div>}
+                ) : <div className="no-dependency"><Check size={15} />{l('This node has no prerequisites.', '该节点没有前置依赖，可以直接添加。')}</div>}
                 <section className="warning-block">
-                  <div className="section-label"><CircleAlert size={13} />常见问题</div>
+                  <div className="section-label"><CircleAlert size={13} />{l('Common pitfalls', '常见问题')}</div>
                   <ul>{inspectedDefinition.pitfalls.map((item) => <li key={item}>{item}</li>)}</ul>
                 </section>
               </>
@@ -717,16 +734,16 @@ export default function App() {
               <>
                 <section className="principle-hero">
                   <Sparkles size={17} />
-                  <span>技术原理</span>
-                  <h3>{inspectedDefinition.name} 是如何工作的？</h3>
+                  <span>{l('TECHNICAL CONCEPTS', '技术原理')}</span>
+                  <h3>{l(`How does ${inspectedDefinition.name} work?`, `${inspectedDefinition.name} 是如何工作的？`)}</h3>
                 </section>
                 <section className="info-block principle-list">
                   {inspectedDefinition.principles.map((item, index) => (
                     <div key={item}><span>{String(index + 1).padStart(2, '0')}</span><p>{item}</p></div>
                   ))}
                 </section>
-                <div className="runtime-explain"><Clock3 size={15} /><div><strong>运行时动态讲解</strong><p>工作流运行到此节点时，时间线会结合当前配置自动说明处理过程。</p></div></div>
-                {inspectedDefinition.docs && <a className="docs-link" href={inspectedDefinition.docs} target="_blank" rel="noreferrer">查看官方技术文档 <ExternalLink size={14} /></a>}
+                <div className="runtime-explain"><Clock3 size={15} /><div><strong>{l('Runtime explanation', '运行时动态讲解')}</strong><p>{l('When the workflow reaches this node, the timeline explains the operation using its current settings.', '工作流运行到此节点时，时间线会结合当前配置自动说明处理过程。')}</p></div></div>
+                {inspectedDefinition.docs && <a className="docs-link" href={inspectedDefinition.docs} target="_blank" rel="noreferrer">{l('Open official documentation', '查看官方技术文档')} <ExternalLink size={14} /></a>}
               </>
             )}
           </div>

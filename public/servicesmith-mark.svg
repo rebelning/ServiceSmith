@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
+  <title id="title">ServiceSmith mark</title>
+  <desc id="desc">A forged S connecting four service nodes.</desc>
+  <defs>
+    <linearGradient id="surface" x1="12" y1="8" x2="84" y2="88" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#19232F"/>
+      <stop offset="1" stop-color="#090D12"/>
+    </linearGradient>
+    <linearGradient id="forge" x1="25" y1="20" x2="74" y2="77" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFB15F"/>
+      <stop offset=".48" stop-color="#FF7A45"/>
+      <stop offset="1" stop-color="#E84F2D"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect x="3" y="3" width="90" height="90" rx="23" fill="url(#surface)" stroke="#2C3948" stroke-width="2"/>
+  <path d="M26 27H39M57 27H70M26 69H39M57 69H70M28 29L39 40M68 29L57 40M28 67L39 56M68 67L57 56" fill="none" stroke="#526171" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="23" cy="27" r="6" fill="#101820" stroke="#FF9A52" stroke-width="3"/>
+  <circle cx="73" cy="27" r="6" fill="#101820" stroke="#FF9A52" stroke-width="3"/>
+  <circle cx="23" cy="69" r="6" fill="#101820" stroke="#FF9A52" stroke-width="3"/>
+  <circle cx="73" cy="69" r="6" fill="#101820" stroke="#FF9A52" stroke-width="3"/>
+  <rect x="34" y="33" width="28" height="30" rx="8" fill="#0C1117" stroke="#3A4654" stroke-width="2"/>
+  <path d="M57.5 40.5H45.7c-3.7 0-6.2 2-6.2 5 0 3.2 2.5 4.6 6.5 5.1l4.2.5c1.7.2 2.5.8 2.5 1.8 0 1.3-1.1 2.1-3 2.1H38.5" fill="none" stroke="url(#forge)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+  <path d="M48 17v5M48 74v5" stroke="#FF9A52" stroke-width="3" stroke-linecap="round" opacity=".8"/>
+</svg>
