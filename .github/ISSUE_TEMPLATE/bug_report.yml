@@ -1,0 +1,67 @@
+name: Bug report
+description: 报告可以稳定复现的问题
+title: "[Bug]: "
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你帮助改进 ServiceSmith。请勿在公开 Issue 中提交密钥、真实密码或其他敏感信息。
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题描述
+      description: 清楚说明实际行为和预期行为。
+      placeholder: 当我……时，ServiceSmith……；我预期……
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 添加……节点
+        2. 连接……
+        3. 点击……
+        4. 看到错误……
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ServiceSmith 版本或提交
+      placeholder: v0.1.0 / commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: browser
+    attributes:
+      label: 浏览器
+      options:
+        - Chrome
+        - Edge
+        - Firefox
+        - Safari
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统
+      placeholder: macOS 15 / Windows 11 / Ubuntu 24.04
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或截图
+      description: 请先删除敏感数据。
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交确认
+      options:
+        - label: 我已经搜索过现有 Issue，没有发现相同问题。
+          required: true
+        - label: 我确认报告中不包含密码、Token 或其他敏感信息。
+          required: true
